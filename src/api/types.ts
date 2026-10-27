@@ -1,0 +1,42 @@
+// Short names for the generated API types. Never hand-write API shapes: run `npm run gen:api`.
+import type { components } from "./schema";
+
+type S = components["schemas"];
+
+export type EDL = S["EDL"];
+export type Segment = S["Segment"];
+export type CropKeyframe = S["CropKeyframe"];
+export type Transition = S["Transition"];
+export type TransitionOverride = S["TransitionOverride"];
+export type TransitionType = S["TransitionType"];
+export type Framing = S["Framing"];
+export type Candidate = S["Candidate"];
+export type ProjectListItem = S["ProjectListItem"];
+export type ProjectPage = S["ProjectPage"];
+export type ProjectDetail = S["ProjectDetail"];
+export type HistoryState = ProjectListItem["state"];
+export type JobOut = S["JobOut"];
+export type MessageOut = S["MessageOut"];
+export type Assets = S["Assets"];
+export type Thumbnails = S["Thumbnails"];
+export type MeOut = S["MeOut"];
+export type LimitKey = S["LimitKey"];
+export type ExportOut = S["ExportOut"];
+export type EdlVersionOut = S["EdlVersionOut"];
+export type SpeakerOut = S["SpeakerOut"];
+export type SpeakerTurnOut = S["SpeakerTurnOut"];
+export type MetadataOut = S["MetadataOut"];
+export type MetadataSetOut = S["MetadataSetOut"];
+export type MetadataStartIn = S["MetadataStartIn"];
+export type MemoryOut = S["MemoryOut"];
+export type SearchHit = S["SearchHit"];
+export type FeedbackIn = S["FeedbackIn"];
+export type AdminSettingsOut = S["AdminSettingsOut"];
+export type LimitSpecOut = S["LimitSpecOut"];
+export type AdminUserRow = S["AdminUserRow"];
+export type AdminUserPage = S["AdminUserPage"];
+export type AdminUserDetail = S["AdminUserDetail"];
+export type AdminUsageOut = S["AdminUsageOut"];
+export type TokenTotals = S["TokenTotals"];
+export type UsageGroup = S["UsageGroup"];
+export type Role = S["Role"];
