@@ -2,6 +2,7 @@
 import type { HistoryState, ProjectListItem } from "@/api/types";
 
 export const STAGE_LABEL: Record<string, string> = {
+  fetch: "Fetching from YouTube",
   probe: "Checking the file",
   transcribe: "Transcribing",
   proxy: "Preparing preview",

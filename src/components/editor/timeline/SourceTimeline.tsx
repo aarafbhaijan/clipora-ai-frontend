@@ -115,7 +115,7 @@ export default function SourceTimeline({ durationS, waveform, thumbnails, speake
       >
         <TimeReadout t={sourceTime} />
         <Typography.Text type="secondary" ellipsis style={{ flex: 1, fontSize: token.fontSizeSM }}>
-          Original video · {clock(dur)}. Ask in the chat or pick an idea to make a plan.
+          Original video · {clock(dur)}. Ask in the chat, pick an idea, or convert the whole video above the player.
         </Typography.Text>
         <ZoomControl
           zoom={zoom.zoom}

@@ -6,12 +6,13 @@ import {
   EditOutlined,
   EllipsisOutlined,
   LogoutOutlined,
+  PlayCircleFilled,
   PlusOutlined,
   SettingOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
 import { Conversations, notification as xNotification, type ConversationsProps } from "@ant-design/x";
-import { App, Avatar, Badge, Button, Dropdown, Flex, Input, Modal, Progress, Spin, theme, Tooltip, Typography } from "antd";
+import { App, Avatar, Badge, Button, Dropdown, Flex, Input, Modal, Progress, Spin, Tag, theme, Tooltip, Typography } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { errorMessage } from "@/api/client";
@@ -21,8 +22,21 @@ import { signOut } from "@/lib/auth";
 import { dateGroup, relative } from "@/lib/format";
 import { chipFor } from "@/lib/states";
 import { percentOf, useUploads } from "@/lib/uploads";
+import { ideColors } from "@/theme";
 
 const GROUP_ORDER = ["Today", "Yesterday", "Previous 7 days", "Older"];
+
+/** "aaraf.ali6400@gmail.com" -> "Aaraf Ali": the email's name part, without digits, in title case. */
+function displayName(email: string | undefined): string {
+  const local = (email ?? "").split("@")[0].replace(/[0-9]+/g, " ");
+  const words = local.split(/[._\-+\s]+/).filter(Boolean);
+  return words.length ? words.map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join(" ") : "Account";
+}
+
+function initials(name: string): string {
+  const words = name.split(" ").filter(Boolean);
+  return ((words[0]?.[0] ?? "?") + (words[1]?.[0] ?? "")).toUpperCase();
+}
 
 /** One quiet status line: a coloured dot with text (colour is never the only signal), then the time. */
 function StatusLine({
@@ -66,9 +80,10 @@ function StatusLine({
 function Thumb({ url }: { url: string | null | undefined }) {
   const { token } = theme.useToken();
   const box: React.CSSProperties = {
-    width: 56,
-    height: 32,
-    borderRadius: token.borderRadiusSM,
+    width: 64,
+    height: 36,
+    borderRadius: token.borderRadius,
+    border: `1px solid ${token.colorBorderSecondary}`,
     flexShrink: 0,
     background: token.colorFillTertiary,
   };
@@ -147,7 +162,7 @@ export default function HistorySidebar({ onNavigate }: { onNavigate?: () => void
         key: p.id,
         group: dateGroup(p.created_at),
         label: (
-          <Flex align="center" gap={10} style={{ minWidth: 0, paddingBlock: 2 }}>
+          <Flex align="center" gap={12} style={{ minWidth: 0, paddingBlock: 6, }}>
             <Thumb url={p.thumbnail_url} />
             <Flex vertical gap={1} style={{ minWidth: 0, flex: 1 }}>
               <Typography.Text ellipsis={{ tooltip: p.title }} style={{ fontWeight: 500 }}>
@@ -185,14 +200,19 @@ export default function HistorySidebar({ onNavigate }: { onNavigate?: () => void
 
   return (
     <Flex vertical style={{ height: "100%" }}>
-      <Flex align="center" justify="space-between" style={{ padding: "16px 16px 8px" }}>
-        <Typography.Title level={5} style={{ margin: 0 }}>
-          Clipora AI
-        </Typography.Title>
+      <Flex align="center" gap={10} style={{ height: 48, padding: "0 16px", borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+        <PlayCircleFilled style={{ color: token.colorPrimary, fontSize: 20 }} />
+        <Typography.Text strong>Clipora AI</Typography.Text>
+      </Flex>
+      {/* Section header like VS Code's Explorer: small caps title, icon actions on the right. */}
+      <Flex align="center" justify="space-between" style={{ padding: "14px 12px 8px 16px" }}>
+        <Typography.Text type="secondary" strong style={{ fontSize: token.fontSizeSM - 1, letterSpacing: 0.8, textTransform: "uppercase" }}>
+          Videos
+        </Typography.Text>
         <Tooltip title="New video">
           <Button
-            type="primary"
-            shape="circle"
+            type="text"
+            size="small"
             icon={<PlusOutlined />}
             aria-label="New video"
             onClick={() => {
@@ -202,10 +222,10 @@ export default function HistorySidebar({ onNavigate }: { onNavigate?: () => void
           />
         </Tooltip>
       </Flex>
-      <div style={{ padding: "0 12px 8px" }}>
+      <div style={{ padding: "0 12px 12px" }}>
         <Input.Search allowClear placeholder="Filter videos" value={filter} onChange={(e) => setFilter(e.target.value)} />
       </div>
-      <div style={{ flex: 1, overflow: "auto" }} onScroll={onScroll}>
+      <div style={{ flex: 1, overflow: "auto", padding: "0 8px" }} onScroll={onScroll}>
         {projects.isLoading ? (
           <Flex justify="center" style={{ padding: 24 }}>
             <Spin />
@@ -260,7 +280,7 @@ export default function HistorySidebar({ onNavigate }: { onNavigate?: () => void
           </Typography.Paragraph>
         ) : null}
       </div>
-      <div style={{ padding: 8, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+      <div style={{ padding: 12, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
         <Dropdown
           trigger={["click"]}
           placement="topLeft"
@@ -279,14 +299,42 @@ export default function HistorySidebar({ onNavigate }: { onNavigate?: () => void
             },
           }}
         >
-          <Button type="text" block style={{ height: "auto", padding: 8, justifyContent: "flex-start" }} aria-label="Account menu">
-            <Flex align="center" gap={10} style={{ minWidth: 0, width: "100%" }}>
-              <Avatar size="small" style={{ background: token.colorPrimary, flexShrink: 0 }}>
-                {(me.data?.email ?? "?").charAt(0).toUpperCase()}
-              </Avatar>
-              <Typography.Text ellipsis style={{ flex: 1, textAlign: "left", fontSize: token.fontSizeSM }}>
-                {me.data?.email ?? "Account"}
-              </Typography.Text>
+          <Button
+            type="text"
+            block
+            style={{ height: "auto", padding: "8px 10px", justifyContent: "flex-start", borderRadius: token.borderRadiusLG }}
+            aria-label="Account menu"
+          >
+            <Flex align="center" gap={12} style={{ minWidth: 0, width: "100%" }}>
+              <Badge dot status="success" offset={[-3, 30]}>
+                <Avatar
+                  size={36}
+                  style={{
+                    flexShrink: 0,
+                    fontWeight: 600,
+                    letterSpacing: 0.5,
+                    background: `linear-gradient(135deg, ${token.colorPrimary}, ${ideColors.agent})`,
+                    border: `2px solid ${token.colorBorder}`,
+                  }}
+                >
+                  {initials(displayName(me.data?.email))}
+                </Avatar>
+              </Badge>
+              <Flex vertical style={{ flex: 1, minWidth: 0, textAlign: "left", lineHeight: 1.3 }}>
+                <Flex align="center" gap={6} style={{ minWidth: 0 }}>
+                  <Typography.Text strong ellipsis>
+                    {displayName(me.data?.email)}
+                  </Typography.Text>
+                  {me.data?.role === "admin" ? (
+                    <Tag bordered={false} color="purple" style={{ marginInlineEnd: 0, fontSize: token.fontSizeSM - 2, lineHeight: "16px" }}>
+                      Admin
+                    </Tag>
+                  ) : null}
+                </Flex>
+                <Typography.Text type="secondary" ellipsis style={{ fontSize: token.fontSizeSM }}>
+                  {me.data?.email ?? ""}
+                </Typography.Text>
+              </Flex>
               <EllipsisOutlined style={{ color: token.colorTextTertiary }} />
             </Flex>
           </Button>

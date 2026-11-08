@@ -1,7 +1,17 @@
 "use client";
 // Chat with the editor agent (design.md "Chat"): ideas card, questions with tappable answers, plan
 // replies with Undo and thumbs, answers with citations that seek the video, progress while it works.
-import { RedoOutlined, UndoOutlined } from "@ant-design/icons";
+import {
+  BulbOutlined,
+  ClockCircleOutlined,
+  FileTextOutlined,
+  RedoOutlined,
+  RobotOutlined,
+  ScissorOutlined,
+  TeamOutlined,
+  UndoOutlined,
+  UserOutlined,
+} from "@ant-design/icons";
 import {
   Actions,
   Bubble,
@@ -11,40 +21,36 @@ import {
   Suggestion,
   Think,
   ThoughtChain,
+  Welcome,
   type BubbleItemType,
 } from "@ant-design/x";
-import { App, Button, Flex, Result, theme, Tooltip, Typography } from "antd";
+import { App, Avatar, Badge, Button, Flex, Result, theme, Tooltip, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage, unwrap } from "@/api/client";
 import { ChatHttpError, hideCitationMarkers, streamChat, type ChatIntent } from "@/api/chatStream";
 import { keys, useMoreIdeas, useRetryJob, useSendMessage } from "@/api/hooks";
 import type { EDL, MessageOut, ProjectDetail } from "@/api/types";
+import { AGENT_STEPS, agentStatus, OTHER_STAGES, stepIndex, type AgentMode } from "@/lib/agent";
 import { useEditor } from "@/lib/editorStore";
 import { clock } from "@/lib/format";
 import { readChoices, readChoiceSent, readSuggestionId, readCitations, readPreviousVersion, readSuggestions } from "@/lib/messages";
 import { usePlayer } from "@/lib/playerStore";
 import { STAGE_LABEL } from "@/lib/states";
 import { srcToOut } from "@/lib/timemap";
+import { ideColors } from "@/theme";
 import Markdown from "../../common/Markdown";
 import Feedback from "./Feedback";
 import { ShortThink, useShorts } from "./GeneratedVideos";
 import IdeasCard from "./IdeasCard";
 
-// Keys are the stage names the agent writes with ctx.progress (backend/packages/agent edit_graph.py).
-const AGENT_STEPS: { key: string; title: string }[] = [
-  { key: "understanding", title: "Understanding your request" },
-  { key: "finding moments", title: "Finding the right moments" },
-  { key: "building plan", title: "Building the plan" },
-  { key: "framing the speaker", title: "Framing the speaker" },
-  { key: "checking", title: "Checking the plan" },
-  { key: "saving", title: "Saving" },
+// Starter tasks on an empty chat: each one is sent as typed.
+const STARTERS = [
+  { key: "Make a 60-second vertical short with the strongest moments", icon: <ScissorOutlined />, label: "Make a 60-second vertical short", description: "The agent picks, orders and frames the best moments" },
+  { key: "Summarize this video in 5 bullet points", icon: <FileTextOutlined />, label: "Summarize the video", description: "Key points with links to the moments" },
+  { key: "Who said what?", icon: <TeamOutlined />, label: "Who said what?", description: "The transcript grouped by speaker" },
+  { key: "What is the best hook for a short in this video?", icon: <BulbOutlined />, label: "Find the best hook", description: "A strong opening line and where it is" },
 ];
-// Stages outside the planning path: shown as a single step.
-const OTHER_STAGES: Record<string, string> = {
-  "changing the plan": "Changing the plan",
-  "searching the video": "Searching the video",
-};
 
 const SLASH = [
   { label: "/shorter · Make it shorter", value: "Make it shorter" },
@@ -60,7 +66,9 @@ interface Props {
   project: ProjectDetail;
 }
 
-function AgentProgress({ stage, kind }: { stage: string | null; kind: string }) {
+/** The agent's plan while it works: every step, done ones ticked, the current one running, the rest pending. */
+function AgentProgress({ stage, kind, percent }: { stage: string | null; kind: string; percent: number }) {
+  const { token } = theme.useToken();
   if (kind === "suggest") return <Think title="Finding ideas in your video" loading blink />;
   if (stage && OTHER_STAGES[stage]) {
     return (
@@ -69,16 +77,57 @@ function AgentProgress({ stage, kind }: { stage: string | null; kind: string }) 
       </Think>
     );
   }
-  const idx = Math.max(0, AGENT_STEPS.findIndex((s) => s.key === stage));
-  const items = AGENT_STEPS.slice(0, idx + 1).map((s, i) => ({
+  const idx = stepIndex(stage);
+  const items = AGENT_STEPS.map((s, i) => ({
     key: s.key,
     title: s.title,
-    status: (i < idx ? "success" : "loading") as "success" | "loading",
+    description: i <= idx ? s.detail : undefined,
+    status: i < idx ? ("success" as const) : i === idx ? ("loading" as const) : undefined,
+    icon: i > idx ? <ClockCircleOutlined style={{ color: token.colorTextQuaternary }} /> : undefined,
+    style: i > idx ? { opacity: 0.5 } : undefined,
   }));
   return (
-    <Think title="Working on it" loading defaultExpanded blink>
+    <Think title={`Working · step ${idx + 1} of ${AGENT_STEPS.length}${percent ? ` · ${Math.round(percent)}%` : ""}`} loading defaultExpanded blink>
       <ThoughtChain items={items} line="dashed" />
     </Think>
+  );
+}
+
+const MODE_BADGE: Record<AgentMode, "processing" | "success" | "warning" | "error" | "default"> = {
+  preparing: "processing",
+  working: "processing",
+  waiting: "warning",
+  failed: "error",
+  idle: "success",
+  unavailable: "default",
+};
+
+/** Panel title like VS Code's chat view: the agent's name and what it is doing. */
+function AgentHeader({ project }: { project: ProjectDetail }) {
+  const { token } = theme.useToken();
+  const agent = agentStatus(project);
+  return (
+    <Flex
+      align="center"
+      justify="space-between"
+      gap={8}
+      style={{ padding: "6px 12px", borderBottom: `1px solid ${token.colorBorderSecondary}`, flexShrink: 0 }}
+    >
+      <Flex align="center" gap={8} style={{ minWidth: 0 }}>
+        <Avatar size={20} icon={<RobotOutlined />} style={{ background: ideColors.agent, flexShrink: 0 }} />
+        <Typography.Text strong style={{ fontSize: token.fontSizeSM, letterSpacing: 0.6, textTransform: "uppercase" }}>
+          Clipora agent
+        </Typography.Text>
+      </Flex>
+      <Badge
+        status={MODE_BADGE[agent.mode]}
+        text={
+          <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+            {agent.label}
+          </Typography.Text>
+        }
+      />
+    </Flex>
   );
 }
 
@@ -313,7 +362,11 @@ export default function ChatPanel({ project }: Props) {
       }
     }
     if (busy && agentJob) {
-      out.push({ key: "working", role: "ai", content: <AgentProgress stage={agentJob.stage} kind={agentJob.kind} /> });
+      out.push({
+        key: "working",
+        role: "ai",
+        content: <AgentProgress stage={agentJob.stage} kind={agentJob.kind} percent={agentJob.percent} />,
+      });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -347,11 +400,18 @@ export default function ChatPanel({ project }: Props) {
 
   if (project.status === "failed" || (project.failed_job?.kind === "ingest" && !ready)) {
     const tooLong = project.failed_job?.error_code === "duration_too_long";
+    const notFetched = project.failed_job?.error_code === "import_failed";
     return (
       <Result
         status="error"
-        title={tooLong ? "This video is too long" : "We couldn't prepare this video"}
-        subTitle={tooLong ? "It is longer than your limit. Delete it and upload a shorter one." : "Try again. If it keeps failing, upload the file again."}
+        title={tooLong ? "This video is too long" : notFetched ? "We couldn't get this video from YouTube" : "We couldn't prepare this video"}
+        subTitle={
+          tooLong
+            ? "It is longer than your limit. Delete it and upload a shorter one."
+            : notFetched
+              ? "It may be private, removed, age-restricted or blocked in this region. Try again, or upload the file instead."
+              : "Try again. If it keeps failing, upload the file again."
+        }
         extra={
           !tooLong && project.failed_job ? (
             <Button type="primary" icon={<RedoOutlined />} loading={retry.isPending} onClick={() => retry.mutate(project.failed_job!.id)}>
@@ -365,6 +425,7 @@ export default function ChatPanel({ project }: Props) {
 
   return (
     <Flex vertical style={{ height: "100%", minHeight: 0 }}>
+      <AgentHeader project={project} />
       <div style={{ flex: 1, minHeight: 0 }}>
         {items.length ? (
           <Bubble.List
@@ -372,14 +433,34 @@ export default function ChatPanel({ project }: Props) {
             autoScroll
             style={{ height: "100%", paddingInline: 8 }}
             role={{
-              ai: { placement: "start", variant: "outlined" },
-              user: { placement: "end", variant: "filled" },
-              ideas: { placement: "start", variant: "borderless", styles: { content: { width: "100%" } } },
+              ai: {
+                placement: "start",
+                variant: "outlined",
+                avatar: <Avatar size={24} icon={<RobotOutlined />} style={{ background: ideColors.agent }} />,
+                header: <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>Clipora agent</Typography.Text>,
+              },
+              user: {
+                placement: "end",
+                variant: "filled",
+                avatar: <Avatar size={24} icon={<UserOutlined />} style={{ background: token.colorPrimary }} />,
+              },
+                ideas: { placement: "start", variant: "borderless", styles: { content: { width: "100%" } } },
             }}
           />
         ) : (
-          <Flex vertical align="center" justify="center" style={{ height: "100%", padding: 24 }}>
-            <Typography.Text type="secondary">Tell Clipora what you want, for example “make a 1-minute short about pricing”.</Typography.Text>
+          <Flex vertical gap={16} style={{ height: "100%", padding: 16, overflow: "auto" }}>
+            <Welcome
+              variant="borderless"
+              icon={<Avatar size={40} icon={<RobotOutlined />} style={{ background: ideColors.agent }} />}
+              title="Clipora agent"
+              description="I read the transcript, find the strongest moments, plan the cuts, frame the speaker and check the result before anything renders. Tell me what you want, or start with one of these."
+            />
+            <Prompts
+              title="Try a task"
+              vertical
+              items={STARTERS}
+              onItemClick={({ data }) => !streaming && ready && void sendTyped(String(data.key))}
+            />
           </Flex>
         )}
       </div>
@@ -401,7 +482,7 @@ export default function ChatPanel({ project }: Props) {
               value={text}
               loading={busy || send.isPending || streaming}
               disabled={!ready}
-              placeholder={waiting ? "Answer the question, or type anything" : "Or tell me what you want · type / for shortcuts"}
+              placeholder={waiting ? "Answer the agent's question, or type anything" : "Ask the agent to edit, find or explain · / for commands"}
               onChange={(v) => {
                 setText(v);
                 onTrigger(v === "/" ? undefined : false);

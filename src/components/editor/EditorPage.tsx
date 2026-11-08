@@ -1,7 +1,7 @@
 "use client";
 // The editor for one video (design.md section 4): chat and metadata tabs, preview, transcript, timeline.
-import { CheckOutlined, CloudSyncOutlined, ExportOutlined, WarningOutlined } from "@ant-design/icons";
-import { Alert, Button, Flex, Splitter, Tabs, Tag, Tooltip, Typography } from "antd";
+import { ExportOutlined } from "@ant-design/icons";
+import { Alert, Button, Flex, Splitter, Tabs, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useProject, useSpeaker } from "@/api/hooks";
 import { useTranscript, useWaveform } from "@/hooks/useMedia";
@@ -12,7 +12,6 @@ import { useEditor, useProjectEdit } from "@/lib/editorStore";
 import { usePlayer } from "@/lib/playerStore";
 import { outputDuration } from "@/lib/timemap";
 import { wordBoundaries } from "@/lib/transcript";
-import { chipFor } from "@/lib/states";
 import PageHeader from "../common/PageHeader";
 import { ErrorState, Loading } from "../common/States";
 import AspectPicker from "./player/AspectPicker";
@@ -22,6 +21,8 @@ import { GeneratedVideosPanel, useShorts } from "./chat/GeneratedVideos";
 import MetadataPanel from "./metadata/MetadataPanel";
 import Preview from "./player/Preview";
 import { QualityToggle } from "./player/Quality";
+import ReframeBar from "./player/ReframeBar";
+import StatusBar from "./StatusBar";
 import SourcePlayer from "./player/SourcePlayer";
 import { SpeakerToggle } from "./player/SpeakerOverlay";
 import SourceTimeline from "./timeline/SourceTimeline";
@@ -32,29 +33,6 @@ function isTyping(e: KeyboardEvent): boolean {
   const el = e.target as HTMLElement | null;
   if (!el) return false;
   return el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || !!el.closest("[role=textbox]");
-}
-
-function SaveState({ projectId }: { projectId: string }) {
-  const { dirty, saving, saveError } = useProjectEdit(projectId);
-  if (saveError)
-    return (
-      <Tooltip title={saveError}>
-        <Tag color="error" icon={<WarningOutlined />}>
-          Not saved
-        </Tag>
-      </Tooltip>
-    );
-  if (saving || dirty)
-    return (
-      <Tag icon={<CloudSyncOutlined />} color="processing">
-        Saving
-      </Tag>
-    );
-  return (
-    <Tag icon={<CheckOutlined />} color="success">
-      Saved
-    </Tag>
-  );
 }
 
 export default function EditorPage({ projectId }: { projectId: string }) {
@@ -68,6 +46,7 @@ export default function EditorPage({ projectId }: { projectId: string }) {
   const resetPlayer = usePlayer((s) => s.reset);
   const [tab, setTab] = useState("chat");
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportWhenPlanned, setExportWhenPlanned] = useState(false);
   const transcript = useTranscript(p?.assets.transcript_url, projectId);
   const waveform = useWaveform(p?.assets.waveform_url, projectId);
   const bounds = useMemo(() => wordBoundaries(transcript.data), [transcript.data]);
@@ -87,6 +66,8 @@ export default function EditorPage({ projectId }: { projectId: string }) {
   }, [p, projectId, load]);
 
   const edl = local.edl;
+  // "Convert & export": the export panel opens as soon as the converted plan has loaded.
+  const drawerOpen = exportOpen || (exportWhenPlanned && !!edl);
   const agentBusy =
     !!p?.active_job && p.active_job.kind === "agent" && (p.active_job.status === "queued" || p.active_job.status === "running");
   const canEdit = !!edl && p?.status === "ready";
@@ -121,7 +102,6 @@ export default function EditorPage({ projectId }: { projectId: string }) {
   if (project.isError && !p) return <ErrorState error={project.error} onRetry={() => project.refetch()} />;
   if (!p) return null;
 
-  const chip = chipFor(p);
   const total = edl ? outputDuration(edl) : 0;
 
   // Right pane: only the player, using the full height. The transcript lives in its own tab on the left.
@@ -145,8 +125,17 @@ export default function EditorPage({ projectId }: { projectId: string }) {
       </div>
     </Flex>
   ) : (
-    // No plan yet: the original video, so the user can watch and pick moments first.
+    // No plan yet: the original video, so the user can watch and pick moments first, or convert all of it.
     <Flex vertical style={{ height: "100%" }}>
+      {p.status === "ready" ? (
+        <ReframeBar
+          projectId={projectId}
+          onReady={(exportNow) => {
+            setTab("videos");
+            setExportWhenPlanned(exportNow);
+          }}
+        />
+      ) : null}
       <Flex justify="center" gap={8} style={{ padding: "8px 8px 0" }}>
         <SpeakerToggle />
         {p.assets.source_url ? <QualityToggle /> : null}
@@ -181,16 +170,9 @@ export default function EditorPage({ projectId }: { projectId: string }) {
       <PageHeader
         title={p.title}
         extra={
-          <Flex gap={8} align="center" wrap>
-            <Tag color={chip.color}>
-              {chip.text}
-              {chip.active && chip.percent !== undefined ? ` ${Math.round(chip.percent)}%` : ""}
-            </Tag>
-            {edl ? <SaveState projectId={projectId} /> : null}
-            <Button type="primary" icon={<ExportOutlined />} disabled={!edl} onClick={() => setExportOpen(true)}>
-              Export
-            </Button>
-          </Flex>
+          <Button type="primary" size="small" icon={<ExportOutlined />} disabled={!edl} onClick={() => setExportOpen(true)}>
+            Export
+          </Button>
         }
       />
       {project.isError ? (
@@ -268,14 +250,19 @@ export default function EditorPage({ projectId }: { projectId: string }) {
           </Splitter.Panel>
         </Splitter>
       </div>
+      <StatusBar project={p} edl={edl ?? null} onOpenChat={() => setTab("chat")} />
       <ExportDrawer
         project={p}
-        open={exportOpen}
-        onClose={() => setExportOpen(false)}
+        open={drawerOpen}
+        onClose={() => {
+          setExportOpen(false);
+          setExportWhenPlanned(false);
+        }}
         outputSeconds={total}
         unsaved={local.dirty || local.saving}
         onWriteMetadata={() => {
           setExportOpen(false);
+          setExportWhenPlanned(false);
           setTab("metadata");
         }}
       />

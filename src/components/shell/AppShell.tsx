@@ -52,7 +52,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         icon={<MenuOutlined />}
         aria-label={narrow ? "Open video list" : collapsed ? "Show video list" : "Hide video list"}
         onClick={() => (narrow ? setOpen(true) : setCollapsed((c) => !c))}
-        style={{ position: "absolute", top: 12, left: 8, zIndex: 10 }}
+        size="small"
+        style={{ position: "absolute", top: 8, left: 10, zIndex: 10 }}
       />
       <Layout.Content style={{ overflow: "auto", height: "100%" }}>{children}</Layout.Content>
     </Layout>
@@ -79,7 +80,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             min={collapsed ? 0 : SIDEBAR_MIN}
             max={SIDEBAR_MAX}
             resizable={!collapsed}
-            style={{ background: token.colorBgContainer, borderRight: `1px solid ${token.colorBorderSecondary}` }}
+            style={{ background: token.colorBgLayout, borderRight: `1px solid ${token.colorBorderSecondary}` }}
           >
             {collapsed ? null : <HistorySidebar />}
           </Splitter.Panel>

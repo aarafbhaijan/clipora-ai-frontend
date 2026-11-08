@@ -102,6 +102,36 @@ export function useMemories() {
   return useQuery({ queryKey: keys.memories, queryFn: () => unwrap(api.GET("/api/memories")) });
 }
 
+/** The whole video in another shape (portrait by default), following the speaker: a new edited video. */
+export function useReframe(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { aspect: string; framing?: "crop" | "fit" }) =>
+      unwrap(
+        api.POST("/api/projects/{project_id}/reframe", {
+          params: { path: { project_id: projectId } },
+          body: { aspect: body.aspect, framing: body.framing ?? "crop" },
+        }),
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.project(projectId) });
+      qc.invalidateQueries({ queryKey: keys.projects });
+    },
+  });
+}
+
+/** New video from a YouTube link: the server fetches it, nothing is downloaded in the browser. */
+export function useImportYoutube() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (url: string) => unwrap(api.POST("/api/projects/import", { body: { url } })),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.projects });
+      qc.invalidateQueries({ queryKey: keys.me });
+    },
+  });
+}
+
 export function useRenameProject() {
   const qc = useQueryClient();
   return useMutation({
