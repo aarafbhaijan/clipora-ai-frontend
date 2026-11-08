@@ -1,10 +1,10 @@
-# Clipora AI: frontend
+# Clipora GenAI · Agentic AI: frontend
 
 Web app for Clipora AI: chat with an agent to turn long videos into shorts. Built with Next.js and Ant Design in a
 GitHub-dark, VS Code-style editor, with a live agent progress view, a timeline editor, a speaker-aware transcript,
 crop and aspect controls, one-click portrait conversion, YouTube import and export.
 
-The API and workers live in [clipora-ai-backend](https://github.com/aarafbhaijan/clipora-ai-backend).
+The API and workers live in [Clipora-GenAI-AgenticAI-Backend](https://github.com/aarafbhaijan/Clipora-GenAI-AgenticAI-Backend).
 
 ## Run
 
